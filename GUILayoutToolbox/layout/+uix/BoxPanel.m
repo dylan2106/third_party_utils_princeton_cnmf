@@ -10,8 +10,8 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
     %
     %  See also: uix.Panel, uipanel, uix.CardPanel
     
-    %  Copyright 2009-2015 The MathWorks, Inc.
-    %  $Revision: 1255 $ $Date: 2016-01-29 13:59:51 +0000 (Fri, 29 Jan 2016) $
+    %  Copyright 2009-2016 The MathWorks, Inc.
+    %  $Revision: 1599 $ $Date: 2018-04-07 07:15:03 +1000 (Sat, 07 Apr 2018) $
     
     properties( Dependent )
         TitleColor % title background color [RGB]
@@ -44,6 +44,15 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
     properties( Constant, Access = private )
         NullTitle = char.empty( [2 0] ) % an obscure empty string, the actual panel Title
         BlankTitle = ' ' % a non-empty blank string, the empty uicontrol String
+    end
+    
+    properties
+        MaximizeTooltipString = 'Expand this panel' % tooltip string
+        MinimizeTooltipString = 'Collapse this panel' % tooltip string
+        UndockTooltipString = 'Undock this panel' % tooltip string
+        DockTooltipString = 'Dock this panel' % tooltip string
+        HelpTooltipString = 'Get help on this panel' % tooltip string
+        CloseTooltipString = 'Close this panel' % tooltip string
     end
     
     methods
@@ -84,12 +93,12 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
                 'ForegroundColor', foregroundColor, ...
                 'BackgroundColor', backgroundColor, ...
                 'FontWeight', 'bold', 'String', '?', ...
-                'TooltipString', 'Get help on this panel', 'Enable', 'on' );
+                'TooltipString', obj.HelpTooltipString, 'Enable', 'on' );
             closeButton = uix.Text( ...
                 'ForegroundColor', foregroundColor, ...
                 'BackgroundColor', backgroundColor, ...
                 'FontWeight', 'bold', 'String', char( 215 ), ...
-                'TooltipString', 'Close this panel', 'Enable', 'on' );
+                'TooltipString', obj.CloseTooltipString, 'Enable', 'on' );
             
             % Store properties
             obj.Title = obj.NullTitle;
@@ -128,9 +137,11 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             obj.redrawButtons()
             
             % Set properties
-            if nargin > 0
-                uix.pvchk( varargin )
-                set( obj, varargin{:} )
+            try
+                uix.set( obj, varargin{:} )
+            catch e
+                delete( obj )
+                e.throwAsCaller()
             end
             
         end % constructor
@@ -215,6 +226,12 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             
             % Set
             obj.MinimizeButton.Callback = value;
+            obj.TitleText.Callback = value;
+            if isempty( value )
+                obj.TitleText.Enable = 'inactive';
+            else
+                obj.TitleText.Enable = 'on';
+            end
             
             % Mark as dirty
             obj.redrawButtons()
@@ -258,6 +275,9 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             % Set
             obj.Minimized_ = value;
             
+            % Show selected child
+            obj.showSelection()
+            
             % Mark as dirty
             obj.Dirty = true;
             
@@ -268,6 +288,95 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             value = obj.TitleBox.Position(4);
             
         end % get.TitleHeight
+        
+        function set.MaximizeTooltipString( obj, value )
+            
+            % Check
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''MaximizeTooltipString'' must be a string.' )
+            
+            % Set
+            obj.MaximizeTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.MaximizeTooltipString
+        
+        function set.MinimizeTooltipString( obj, value )
+            
+            % Check
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''MinimizeTooltipString'' must be a string.' )
+            
+            % Set
+            obj.MinimizeTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.MinimizeTooltipString
+        
+        function set.UndockTooltipString( obj, value )
+            
+            % Check
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''UndockTooltipString'' must be a string.' )
+            
+            % Set
+            obj.UndockTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.UndockTooltipString
+        
+        function set.DockTooltipString( obj, value )
+            
+            % Check
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''DockTooltipString'' must be a string.' )
+            
+            % Set
+            obj.DockTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.DockTooltipString
+        
+        function set.HelpTooltipString( obj, value )
+            
+            % Check
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''HelpTooltipString'' must be a string.' )
+            
+            % Set
+            obj.HelpTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.HelpTooltipString
+        
+        function set.CloseTooltipString( obj, value )
+            
+            % assert that value is a char array
+            assert( ischar( value ), ...
+                'uix:InvalidPropertyValue', ...
+                'Property ''CloseTooltipString'' must be a string.' )
+            
+            obj.CloseTooltipString = value;
+            
+            % Mark as dirty
+            obj.redrawButtons()
+            
+        end % set.CloseTooltipString
         
     end % accessors
     
@@ -406,11 +515,9 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             %
             %  See also: redrawButtons
             
-            % Compute bounds
+            % Compute positions
             bounds = hgconvertunits( ancestor( obj, 'figure' ), ...
                 [0 0 1 1], 'normalized', 'pixels', obj );
-            
-            % Position decorations
             tX = 1;
             tW = max( bounds(3), 1 );
             tH = obj.TitleHeight_; % title height
@@ -419,43 +526,51 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
                 obj.TitleHeight_ = tH; % store
             end
             tY = 1 + bounds(4) - tH;
-            obj.TitleBox.Position = [tX tY tW tH];
-            obj.redrawButtons()
-            
-            % Position contents
             p = obj.Padding_;
             cX = 1 + p;
             cW = max( bounds(3) - 2 * p, 1 );
             cH = max( bounds(4) - tH - 2 * p, 1 );
             cY = tY - p - cH;
             contentsPosition = [cX cY cW cH];
-            obj.redrawContents( contentsPosition )
+            
+            % Redraw contents
+            selection = obj.Selection_;
+            if selection ~= 0
+                uix.setPosition( obj.Contents_(selection), contentsPosition, 'pixels' )
+            end
+            obj.TitleBox.Position = [tX tY tW tH];
+            obj.redrawButtons()
             
         end % redraw
         
-        function redrawContents( obj, position )
-            %redrawContents  Redraw contents
+        function showSelection( obj )
+            %showSelection  Show selected child, hide the others
+            %
+            %  c.showSelection() shows the selected child of the container
+            %  c, and hides the others.
             
             % Call superclass method
-            redrawContents@uix.mixin.Panel( obj, position )
+            showSelection@uix.mixin.Panel( obj )
             
             % If minimized, hide selected contents too
-            if obj.Selection_ ~= 0 && obj.Minimized_
-                child = obj.Contents_(obj.Selection_);
+            selection = obj.Selection_;
+            if selection ~= 0 && obj.Minimized_
+                child = obj.Contents_(selection);
                 child.Visible = 'off';
                 if isa( child, 'matlab.graphics.axis.Axes' )
                     child.ContentsVisible = 'off';
                 end
                 % As a remedy for g1100294, move off-screen too
+                margin = 1000;
                 if isa( child, 'matlab.graphics.axis.Axes' ) ...
                         && strcmp(child.ActivePositionProperty, 'outerposition' )
-                    child.OuterPosition(1) = -child.OuterPosition(3)-20;
+                    child.OuterPosition(1) = -child.OuterPosition(3)-margin;
                 else
-                    child.Position(1) = -child.Position(3)-20;
+                    child.Position(1) = -child.Position(3)-margin;
                 end
             end
             
-        end % redrawContents
+        end % showSelection
         
     end % template methods
     
@@ -471,18 +586,21 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             
             % Retrieve button box and buttons
             box = obj.TitleBox;
+            titleText = obj.TitleText;
             minimizeButton = obj.MinimizeButton;
             dockButton = obj.DockButton;
             helpButton = obj.HelpButton;
             closeButton = obj.CloseButton;
             
             % Detach all buttons
+            titleText.Parent = [];
             minimizeButton.Parent = [];
             dockButton.Parent = [];
             helpButton.Parent = [];
             closeButton.Parent = [];
             
             % Attach active buttons
+            titleText.Parent = box;
             minimize = ~isempty( obj.MinimizeFcn );
             if minimize
                 minimizeButton.Parent = box;
@@ -496,28 +614,30 @@ classdef BoxPanel < uix.Panel & uix.mixin.Panel
             help = ~isempty( obj.HelpFcn );
             if help
                 helpButton.Parent = box;
+                helpButton.TooltipString = obj.HelpTooltipString;
                 box.Widths(end) = helpButton.Extent(3);
             end
             close = ~isempty( obj.CloseRequestFcn );
             if close
                 closeButton.Parent = box;
+                closeButton.TooltipString = obj.CloseTooltipString;
                 box.Widths(end) = closeButton.Extent(3);
             end
             
             % Update icons
             if obj.Minimized_
                 minimizeButton.String = char( 9662 );
-                minimizeButton.TooltipString = 'Expand this panel';
+                minimizeButton.TooltipString = obj.MaximizeTooltipString;
             else
                 minimizeButton.String = char( 9652 );
-                minimizeButton.TooltipString = 'Collapse this panel';
+                minimizeButton.TooltipString = obj.MinimizeTooltipString;
             end
             if obj.Docked_
                 dockButton.String = char( 8599 );
-                dockButton.TooltipString = 'Undock this panel';
+                dockButton.TooltipString = obj.UndockTooltipString;
             else
                 dockButton.String = char( 8600 );
-                dockButton.TooltipString = 'Dock this panel';
+                dockButton.TooltipString = obj.DockTooltipString;
             end
             
         end % redrawButtons

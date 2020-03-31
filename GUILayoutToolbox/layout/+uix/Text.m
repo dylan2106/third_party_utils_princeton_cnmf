@@ -1,4 +1,4 @@
-classdef Text < matlab.mixin.SetGet
+classdef ( Hidden ) Text < matlab.mixin.SetGet
     %uix.Text  Text control
     %
     %  t = uix.Text(p1,v1,p2,v2,...) constructs a text control and sets
@@ -11,7 +11,7 @@ classdef Text < matlab.mixin.SetGet
     %  See also: uicontrol
     
     %  Copyright 2009-2015 The MathWorks, Inc.
-    %  $Revision: 1165 $ $Date: 2015-12-06 03:09:17 -0500 (Sun, 06 Dec 2015) $
+    %  $Revision: 1574 $ $Date: 2017-11-07 11:42:03 +0000 (Tue, 07 Nov 2017) $
     
     properties( Dependent )
         BackgroundColor
@@ -108,9 +108,11 @@ classdef Text < matlab.mixin.SetGet
             obj.FigureListener = figureListener;
             
             % Set properties
-            if nargin > 0
-                uix.pvchk( varargin )
-                set( obj, varargin{:} );
+            try
+                uix.set( obj, varargin{:} )
+            catch e
+                delete( obj )
+                e.throwAsCaller()
             end
             
         end % constructor
@@ -531,10 +533,14 @@ end % classdef
 function o = checkBoxLabelOffset()
 %checkBoxLabelOffset  Horizontal offset to checkbox label
 
-if verLessThan( 'MATLAB', '8.6' ) % R2015b
-    o = 18;
+if ismac
+    o = 20;
 else
-    o = 16;
+    if verLessThan( 'MATLAB', '8.6' ) % R2015b
+        o = 18;
+    else
+        o = 16;
+    end
 end
 
 end % margin

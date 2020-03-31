@@ -4,8 +4,8 @@ classdef Container < handle
     %  uix.mixin.Container is a mixin class used by containers to provide
     %  various properties and template methods.
     
-    %  Copyright 2009-2015 The MathWorks, Inc.
-    %  $Revision: 1165 $ $Date: 2015-12-06 08:09:17 +0000 (Sun, 06 Dec 2015) $
+    %  Copyright 2009-2016 The MathWorks, Inc.
+    %  $Revision: 1778 $ $Date: 2019-01-23 23:08:35 +0000 (Wed, 23 Jan 2019) $
     
     properties( Dependent, Access = public )
         Contents % contents in layout order
@@ -61,6 +61,9 @@ classdef Container < handle
             obj.ChildAddedListener = childAddedListener;
             obj.ChildRemovedListener = childRemovedListener;
             obj.SizeChangedListener = sizeChangedListener;
+            
+            % Track usage
+            obj.track()
             
         end % constructor
         
@@ -155,6 +158,9 @@ classdef Container < handle
         function onChildAdded( obj, ~, eventData )
             %onChildAdded  Event handler
             
+            % Do nothing if add is internal tree surgery
+            if isTreeSurgery( eventData.Child ), return, end
+            
             % Call template method
             obj.addChild( eventData.Child )
             
@@ -165,6 +171,9 @@ classdef Container < handle
             
             % Do nothing if container is being deleted
             if strcmp( obj.BeingDeleted, 'on' ), return, end
+            
+            % Do nothing if remove is internal tree surgery
+            if isTreeSurgery( eventData.Child ), return, end
             
             % Call template method
             obj.removeChild( eventData.Child )
@@ -275,6 +284,37 @@ classdef Container < handle
             
         end % isDrawable
         
+        function track( obj )
+            %track  Track usage
+            
+            persistent TRACKED % single shot
+            if isempty( TRACKED )
+                v = ver( 'layout' );
+                try %#ok<TRYNC>
+                    uix.tracking( 'UA-82270656-2', v(1).Version, class( obj ) )
+                end
+                TRACKED = true;
+            end
+            
+        end % track
+        
     end % template methods
     
 end % classdef
+
+function tf = isTreeSurgery( child )
+%isTreeSurgery  Test for internal tree surgery
+%
+%  Certain internal operations perform tree surgery, removing a child
+%  temporarily and adding it back under an additional node.
+
+if ~isa( child, 'matlab.graphics.axis.Axes' ) % only certain types
+    tf = false;
+elseif verLessThan( 'MATLAB', '9.5' ) % only certain versions
+    tf = false;
+else % check stack
+    s = dbstack();
+    tf = any( strcmp( 'ScribeStackManager.createLayer', {s.name} ) );
+end
+
+end % isTreeSurgery

@@ -1,4 +1,4 @@
-classdef Divider < hgsetget
+classdef ( Hidden ) Divider < matlab.mixin.SetGet
     %uix.Divider  Draggable divider
     %
     %  d = uix.Divider() creates a divider.
@@ -6,8 +6,8 @@ classdef Divider < hgsetget
     %  d = uix.Divider(p1,v1,p2,v2,...) creates a divider and sets
     %  specified property p1 to value v1, etc.
     
-    %  Copyright 2009-2015 The MathWorks, Inc.
-    %  $Revision: 1165 $ $Date: 2015-12-06 03:09:17 -0500 (Sun, 06 Dec 2015) $
+    %  Copyright 2009-2016 The MathWorks, Inc.
+    %  $Revision: 1601 $ $Date: 2018-05-01 10:22:53 +0100 (Tue, 01 May 2018) $
     
     properties( Dependent )
         Parent % parent
@@ -44,14 +44,18 @@ classdef Divider < hgsetget
             % Create control
             control = matlab.ui.control.UIControl( ...
                 'Style', 'checkbox', 'Internal', true, ...
-                'Enable', 'inactive', 'DeleteFcn', @obj.onDeleted );
+                'Enable', 'inactive', 'DeleteFcn', @obj.onDeleted,...
+                'Tag', 'uix.Divider' );
             
             % Store control
             obj.Control = control;
             
             % Set properties
-            if nargin > 0
-                set( obj, varargin{:} );
+            try
+                uix.set( obj, varargin{:} )
+            catch e
+                delete( obj )
+                e.throwAsCaller()
             end
             
             % Force update
@@ -248,8 +252,14 @@ classdef Divider < hgsetget
             %  tf = d.isMouseOver(wmd) tests whether the WindowMouseData
             %  wmd is consistent with the mouse pointer being over the
             %  divider d.
+            %
+            %  This method returns false for dividers that are being
+            %  deleted.
             
-            tf = reshape( [obj.Control] == eventData.HitObject, size( obj ) );
+            tf = isvalid( obj ); % initialize
+            for ii = 1:numel( obj )
+                tf(ii) = tf(ii) && obj(ii).Control == eventData.HitObject;
+            end
             
         end % isMouseOver
         

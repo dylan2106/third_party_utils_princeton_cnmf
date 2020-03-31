@@ -9,8 +9,8 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
     %
     %  See also: uix.HBoxFlex, uix.VBoxFlex, uix.Grid
     
-    %  Copyright 2009-2015 The MathWorks, Inc.
-    %  $Revision: 1260 $ $Date: 2016-02-25 00:37:28 +0000 (Thu, 25 Feb 2016) $
+    %  Copyright 2009-2016 The MathWorks, Inc.
+    %  $Revision: 1682 $ $Date: 2018-06-11 16:57:09 +0100 (Mon, 11 Jun 2018) $
     
     properties( Access = public, Dependent, AbortSet )
         DividerMarkings % divider markings [on|off]
@@ -55,10 +55,15 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
             obj.FrontDivider = frontDivider;
             obj.BackgroundColorListener = backgroundColorListener;
             
+            % Set Spacing property (may be overwritten by uix.set)
+            obj.Spacing = 5;
+            
             % Set properties
-            if nargin > 0
-                uix.pvchk( varargin )
-                set( obj, varargin{:} )
+            try
+                uix.set( obj, varargin{:} )
+            catch e
+                delete( obj )
+                e.throwAsCaller()
             end
             
         end % constructor
@@ -92,7 +97,7 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
     
     methods( Access = protected )
         
-        function onMousePress( obj, ~, eventData )
+        function onMousePress( obj, source, eventData )
             %onMousePress  Handler for WindowMousePress events
             
             % Check whether mouse is over a divider
@@ -113,6 +118,9 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
             obj.ActiveDividerPosition = divider.Position;
             root = groot();
             obj.MousePressLocation = root.PointerLocation;
+            
+            % Make sure the pointer is appropriate
+            obj.updateMousePointer( source, eventData );
             
             % Activate divider
             frontDivider = obj.FrontDivider;
@@ -139,7 +147,9 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
                 jc = loc + 1;
                 divider = obj.RowDividers(loc);
                 contents = obj.Contents_;
-                oldPixelHeights = [contents(ic).Position(4); contents(jc).Position(4)];
+                ip = uix.getPosition( contents(ic), 'pixels' );
+                jp = uix.getPosition( contents(jc), 'pixels' );
+                oldPixelHeights = [ip(4); jp(4)];
                 minimumHeights = obj.MinimumHeights_(ih:jh,:);
                 if delta < 0 % limit to minimum distance from lower neighbor
                     delta = max( delta, minimumHeights(2) - oldPixelHeights(2) );
@@ -170,7 +180,9 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
                 jc = r * -loc + 1;
                 divider = obj.ColumnDividers(iw);
                 contents = obj.Contents_;
-                oldPixelWidths = [contents(ic).Position(3); contents(jc).Position(3)];
+                ip = uix.getPosition( contents(ic), 'pixels' );
+                jp = uix.getPosition( contents(jc), 'pixels' );
+                oldPixelWidths = [ip(3); jp(3)];
                 minimumWidths = obj.MinimumWidths_(iw:jw,:);
                 if delta < 0 % limit to minimum distance from left neighbor
                     delta = max( delta, minimumWidths(1) - oldPixelWidths(1) );
@@ -214,22 +226,7 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
             
             loc = obj.ActiveDivider;
             if loc == 0 % hovering, update pointer
-                oldPointer = obj.Pointer;
-                if any( obj.RowDividers.isMouseOver( eventData ) )
-                    newPointer = 'top';
-                elseif any( obj.ColumnDividers.isMouseOver( eventData ) )
-                    newPointer = 'left';
-                else
-                    newPointer = 'unset';
-                end
-                switch newPointer
-                    case oldPointer % no change
-                        % do nothing
-                    case 'unset' % change, unset
-                        obj.unsetPointer()
-                    otherwise % change, set
-                        obj.setPointer( source, newPointer )
-                end
+                obj.updateMousePointer( source, eventData );
             elseif loc > 0 % dragging row divider
                 root = groot();
                 delta = root.PointerLocation(2) - obj.MousePressLocation(2);
@@ -238,7 +235,9 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
                 ic = loc;
                 jc = loc + 1;
                 contents = obj.Contents_;
-                oldPixelHeights = [contents(ic).Position(4); contents(jc).Position(4)];
+                ip = uix.getPosition( contents(ic), 'pixels' );
+                jp = uix.getPosition( contents(jc), 'pixels' );
+                oldPixelHeights = [ip(4); jp(4)];
                 minimumHeights = obj.MinimumHeights_(ih:jh,:);
                 if delta < 0 % limit to minimum distance from lower neighbor
                     delta = max( delta, minimumHeights(2) - oldPixelHeights(2) );
@@ -256,7 +255,9 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
                 ic = r * (-loc-1) + 1;
                 jc = r * -loc + 1;
                 contents = obj.Contents_;
-                oldPixelWidths = [contents(ic).Position(3); contents(jc).Position(3)];
+                ip = uix.getPosition( contents(ic), 'pixels' );
+                jp = uix.getPosition( contents(jc), 'pixels' );
+                oldPixelWidths = [ip(3); jp(3)];
                 minimumWidths = obj.MinimumWidths_(iw:jw,:);
                 if delta < 0 % limit to minimum distance from left neighbor
                     delta = max( delta, minimumWidths(1) - oldPixelWidths(1) );
@@ -444,5 +445,30 @@ classdef GridFlex < uix.Grid & uix.mixin.Flex
         end % reparent
         
     end % template methods
+    
+    methods( Access = protected )
+        
+        function updateMousePointer ( obj, source, eventData  )
+            
+            oldPointer = obj.Pointer;
+            if any( obj.RowDividers.isMouseOver( eventData ) )
+                newPointer = 'top';
+            elseif any( obj.ColumnDividers.isMouseOver( eventData ) )
+                newPointer = 'left';
+            else
+                newPointer = 'unset';
+            end
+            switch newPointer
+                case oldPointer % no change
+                    % do nothing
+                case 'unset' % change, unset
+                    obj.unsetPointer()
+                otherwise % change, set
+                    obj.setPointer( source, newPointer )
+            end
+            
+        end % updateMousePointer
+        
+    end % helpers methods
     
 end % classdef
